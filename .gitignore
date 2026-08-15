@@ -1,0 +1,7 @@
+# Built web assets served alongside the Caddyfile on the droplet - not
+# source, not tracked here. Deployed separately via the social-app repo's
+# web export + rsync.
+sunnahsky-web/
+
+# Historical pre-git backup copies from before this repo existed.
+Caddyfile.pre-*-backup

@@ -1,0 +1,33 @@
+{
+	email abdullahalam@salafibookstore.com
+	on_demand_tls {
+		ask http://localhost:3000/tls-check
+	}
+}
+
+app.sunnahsky.com {
+	tls {
+		on_demand
+	}
+	root * /etc/caddy/sunnahsky-web
+	try_files {path} /index.html
+	file_server
+}
+
+sunnahsky.com {
+	tls {
+		on_demand
+	}
+	@root {
+		path /
+	}
+	redir @root https://app.sunnahsky.com{uri} 302
+	reverse_proxy http://localhost:3000
+}
+
+*.guest.sunnahsky.com, *.sunnahsky.com {
+	tls {
+		on_demand
+	}
+	reverse_proxy http://localhost:3000
+}
