@@ -5,10 +5,17 @@
 #   1. `caddy validate` run directly against the droplet's actual image
 #      (v2.11.4) confirms the interval/burst directive names were removed
 #      outright, not just deprecated - validation fails hard, not a
-#      warning. Removed below; the same 5-per-2-minute rate limit is now
-#      enforced in /tls-check itself (services/pds/index.ts,
-#      IssuanceRateLimiter) - ships in the same PDS image rebuild as the
+#      warning. Removed below. /tls-check carries its own limiter instead
+#      (services/pds/tls-check-rate-limiter.ts) - per hostname, NOT
+#      global: Caddy asks on every certificate-cache miss, before checking
+#      its own storage, so after `docker restart caddy` every existing
+#      handle host asks again at once and a global cap would refuse TLS
+#      for the hosts past it. Ships in the same PDS image rebuild as the
 #      write-guard change, not a separate deploy.
+#   1b. Post-deploy check for exactly that: `docker restart caddy`, then
+#      curl more than a handful of *existing* handle hosts within a
+#      minute and confirm every one completes TLS and returns its DID at
+#      /.well-known/atproto-did.
 #   2. Validate the {labels.N} indices in the wildcard blocks below against
 #      real hostnames before reload - a wrong index redirects every handle
 #      to the wrong path. See the worked examples in each block's comment.
@@ -25,6 +32,16 @@
 }
 
 pds.sunnahsky.com {
+	# /tls-check is the on_demand_tls "ask" endpoint above. Caddy calls it
+	# directly on localhost:3000, never through this site block, so nothing
+	# legitimate reaches it via the public host - and with a per-hostname
+	# approval limiter behind it, a public caller could otherwise spend a
+	# real handle's budget on purpose. Answered here, before reverse_proxy
+	# (Caddy orders `respond` ahead of `reverse_proxy` regardless of
+	# position in the block, and `respond` is terminal). The PDS also
+	# refuses the route when X-Forwarded-For is present, as a backstop.
+	@tlscheck path /tls-check
+	respond @tlscheck 404
 	reverse_proxy http://localhost:3000
 }
 
