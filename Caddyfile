@@ -2,12 +2,13 @@
 # Step 1 (hostname move) and Step 5 (handle-to-profile redirect). NOT yet
 # deployed: this file was written as code review/preparation, not applied to
 # the droplet. Before any `caddy reload`:
-#   1. Run `caddy validate` on the droplet - the interval/burst directive
-#      names below were deprecated in Caddy 2.8 in favour of the permission
-#      model and may not exist on the caddy:2 image the droplet runs. If
-#      validation rejects them, the per-domain-issuance rate limit needs to
-#      move into /tls-check itself instead (services/pds/index.ts) - a code
-#      change and image rebuild, not just a config edit.
+#   1. `caddy validate` run directly against the droplet's actual image
+#      (v2.11.4) confirms the interval/burst directive names were removed
+#      outright, not just deprecated - validation fails hard, not a
+#      warning. Removed below; the same 5-per-2-minute rate limit is now
+#      enforced in /tls-check itself (services/pds/index.ts,
+#      IssuanceRateLimiter) - ships in the same PDS image rebuild as the
+#      write-guard change, not a separate deploy.
 #   2. Validate the {labels.N} indices in the wildcard blocks below against
 #      real hostnames before reload - a wrong index redirects every handle
 #      to the wrong path. See the worked examples in each block's comment.
@@ -20,8 +21,6 @@
 	email abdullahalam@salafibookstore.com
 	on_demand_tls {
 		ask http://localhost:3000/tls-check
-		interval 2m
-		burst 5
 	}
 }
 
@@ -55,7 +54,9 @@ www.sunnahsky.com {
 # labels.2=johnsmith (this block only ever sees the Striker tier, so
 # labels.2 is always the name).
 *.sunnahsky.com {
-	tls { on_demand }
+	tls {
+		on_demand
+	}
 	@wellknown path /.well-known/atproto-did
 	handle @wellknown {
 		reverse_proxy http://localhost:3000
@@ -70,7 +71,9 @@ www.sunnahsky.com {
 # ever sees the Catcher tier (the *.guest. subdomain), so labels.3 is
 # always the name.
 *.guest.sunnahsky.com {
-	tls { on_demand }
+	tls {
+		on_demand
+	}
 	@wellknown path /.well-known/atproto-did
 	handle @wellknown {
 		reverse_proxy http://localhost:3000
