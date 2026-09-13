@@ -51,8 +51,9 @@ www.sunnahsky.com {
 # pds.sunnahsky.com, and handle resolution is the one .well-known fetch.
 #
 # {labels.N} counts DNS labels from the right, zero-based. Worked example:
-# johnsmith.sunnahsky.com -> labels.1=com, labels.2=johnsmith (this block
-# only ever sees the Striker tier, so labels.2 is always the name).
+# johnsmith.sunnahsky.com -> labels.0=com, labels.1=sunnahsky,
+# labels.2=johnsmith (this block only ever sees the Striker tier, so
+# labels.2 is always the name).
 *.sunnahsky.com {
 	tls { on_demand }
 	@wellknown path /.well-known/atproto-did
@@ -64,9 +65,10 @@ www.sunnahsky.com {
 	}
 }
 
-# Worked example: jakecooper.guest.sunnahsky.com -> labels.1=com,
-# labels.2=guest, labels.3=jakecooper. This block only ever sees the
-# Catcher tier (the *.guest. subdomain), so labels.3 is always the name.
+# Worked example: jakecooper.guest.sunnahsky.com -> labels.0=com,
+# labels.1=sunnahsky, labels.2=guest, labels.3=jakecooper. This block only
+# ever sees the Catcher tier (the *.guest. subdomain), so labels.3 is
+# always the name.
 *.guest.sunnahsky.com {
 	tls { on_demand }
 	@wellknown path /.well-known/atproto-did
