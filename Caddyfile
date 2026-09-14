@@ -1,29 +1,12 @@
-# "PDS hostname move and public URL scheme" - final target state, combining
-# Step 1 (hostname move) and Step 5 (handle-to-profile redirect). NOT yet
-# deployed: this file was written as code review/preparation, not applied to
-# the droplet. Before any `caddy reload`:
-#   1. `caddy validate` run directly against the droplet's actual image
-#      (v2.11.4) confirms the interval/burst directive names were removed
-#      outright, not just deprecated - validation fails hard, not a
-#      warning. Removed below. /tls-check carries its own limiter instead
-#      (services/pds/tls-check-rate-limiter.ts) - per hostname, NOT
-#      global: Caddy asks on every certificate-cache miss, before checking
-#      its own storage, so after `docker restart caddy` every existing
-#      handle host asks again at once and a global cap would refuse TLS
-#      for the hosts past it. Ships in the same PDS image rebuild as the
-#      write-guard change, not a separate deploy.
-#   1b. Post-deploy check for exactly that: `docker restart caddy`, then
-#      curl more than a handful of *existing* handle hosts within a
-#      minute and confirm every one completes TLS and returns its DID at
-#      /.well-known/atproto-did.
-#   2. Validate the {labels.N} indices in the wildcard blocks below against
-#      real hostnames before reload - a wrong index redirects every handle
-#      to the wrong path. See the worked examples in each block's comment.
-#   3. This is a two-step deploy, not one: the wildcard block below (with
-#      path-based redirect) is Step 5, and depends on Step 1's hostname move
-#      (PDS_HOSTNAME=pds.sunnahsky.com, PDS_SERVICE_HANDLE_DOMAINS) already
-#      being live - reversing that order breaks handle resolution for every
-#      account. See the plan's own Sequencing section.
+# "PDS hostname move and public URL scheme" - Stage 1 of 2 (hostname move
+# only). Wildcard handle hosts still plain-proxy every path, exactly as
+# they did before this move - Stage 2 (this same repo's next commit)
+# switches them to the path-based profile redirect, deployed separately
+# and only once this stage is live and verified. Reversing that order
+# breaks handle resolution for every account (PDS_HOSTNAME/
+# PDS_SERVICE_HANDLE_DOMAINS must already be live on the new hostname
+# before a redirect can send anyone to a canonical profile path that
+# means anything) - see the plan's own Sequencing section.
 {
 	email abdullahalam@salafibookstore.com
 	on_demand_tls {
@@ -59,43 +42,11 @@ www.sunnahsky.com {
 	redir https://sunnahsky.com{uri} 301
 }
 
-# Only /.well-known/atproto-did is proxied to the PDS - the PDS does not
-# check the Host header on XRPC routes, so passing /xrpc/* through here
-# (as the original brief's "defensive only" plan called for) would serve
-# the entire API on every {handle}.sunnahsky.com host. Nothing legitimately
-# calls XRPC on a handle host: the DID document's own service endpoint is
-# pds.sunnahsky.com, and handle resolution is the one .well-known fetch.
-#
-# {labels.N} counts DNS labels from the right, zero-based. Worked example:
-# johnsmith.sunnahsky.com -> labels.0=com, labels.1=sunnahsky,
-# labels.2=johnsmith (this block only ever sees the Striker tier, so
-# labels.2 is always the name).
-*.sunnahsky.com {
+# Stage 1 only: every handle host still proxies straight through, same as
+# before the move - no path-based redirect yet (that's Stage 2).
+*.guest.sunnahsky.com, *.sunnahsky.com {
 	tls {
 		on_demand
 	}
-	@wellknown path /.well-known/atproto-did
-	handle @wellknown {
-		reverse_proxy http://localhost:3000
-	}
-	handle {
-		redir https://sunnahsky.com/{labels.2}{uri} 301
-	}
-}
-
-# Worked example: jakecooper.guest.sunnahsky.com -> labels.0=com,
-# labels.1=sunnahsky, labels.2=guest, labels.3=jakecooper. This block only
-# ever sees the Catcher tier (the *.guest. subdomain), so labels.3 is
-# always the name.
-*.guest.sunnahsky.com {
-	tls {
-		on_demand
-	}
-	@wellknown path /.well-known/atproto-did
-	handle @wellknown {
-		reverse_proxy http://localhost:3000
-	}
-	handle {
-		redir https://sunnahsky.com/{labels.3}.guest{uri} 301
-	}
+	reverse_proxy http://localhost:3000
 }
