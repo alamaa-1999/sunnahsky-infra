@@ -1,34 +1,37 @@
-# "PDS hostname move and public URL scheme" - Stage 1 of 2 (hostname move
-# only). Wildcard handle hosts still plain-proxy every path, exactly as
-# they did before this move - Stage 2 switches them to the path-based
-# profile redirect, deployed separately and only once this stage is live
-# and verified.
+# "PDS hostname move and public URL scheme" - Stage 2 of 2 (handle-to-
+# profile redirect). Stage 1 (hostname move) has been live since
+# 2026-09-14; wildcard handle hosts below now redirect to the canonical
+# profile path instead of plain-proxying every request.
 #
-# INCIDENT, 2026-09-14 through 2026-09-17: the first version of this stage
-# removed `tls { on_demand }` from every explicit host block (pds./app./
-# www./sunnahsky.com), giving them "regular" managed automatic HTTPS
-# instead - a TLS provisioning mode this deployment had never used before
-# (the pre-move Caddyfile put `tls { on_demand }` on literally every
-# block, apex included). That broke TLS entirely for app.sunnahsky.com
-# (previously live, working, serving real traffic) and pds.sunnahsky.com
-# for three days - `openssl s_client` showed "no peer certificate
-# available" / TLS alert 80 (internal_error), meaning Caddy's regular-
-# managed cert path never actually served the certificate at handshake
-# time for these names, despite a valid cert existing on disk for both
-# and /tls-check correctly approving both on request. Root cause not
-# fully isolated (likely an interaction between the global on_demand_tls
-# block and mixing an exact-host "regular" automation policy with an
-# overlapping wildcard on-demand policy for the same subject names -
-# every one of the three broken hosts is a single-label subdomain that
-# textually matches `*.sunnahsky.com`; the apex, which matches no
-# wildcard, was the only one of the four names in that policy that kept
-# working). Mitigated by reverting every explicit host block to
-# `tls { on_demand }`, matching the one TLS provisioning mode this setup
-# has ever actually run reliably. Do not remove `tls { on_demand }` from
-# any block below without a real test that survives a `docker restart
-# caddy` and confirms the exact host actually serves TLS afterward - a
-# green `caddy validate` and a same-second curl are not sufficient
-# verification for this class of bug.
+# INCIDENT, 2026-09-14 through 2026-09-17 (Stage 1): the first version of
+# that stage removed `tls { on_demand }` from every explicit host block
+# (pds./app./www./sunnahsky.com), giving them "regular" managed automatic
+# HTTPS instead - a TLS provisioning mode this deployment had never used
+# before (the pre-move Caddyfile put `tls { on_demand }` on literally
+# every block, apex included). That broke TLS entirely for
+# app.sunnahsky.com (previously live, working, serving real traffic) and
+# pds.sunnahsky.com for three days - `openssl s_client` showed "no peer
+# certificate available" / TLS alert 80 (internal_error), meaning Caddy's
+# regular-managed cert path never actually served the certificate at
+# handshake time for these names, despite a valid cert existing on disk
+# for both and /tls-check correctly approving both on request. Root cause
+# not fully isolated (likely an interaction between the global
+# on_demand_tls block and mixing an exact-host "regular" automation
+# policy with an overlapping wildcard on-demand policy for the same
+# subject names - every one of the three broken hosts is a single-label
+# subdomain that textually matches `*.sunnahsky.com`; the apex, which
+# matches no wildcard, was the only one of the four names in that policy
+# that kept working). Mitigated by putting `tls { on_demand }` back on
+# every explicit host block except the apex (which deliberately stays on
+# regular managed TLS - see its own comment below), matching the one TLS
+# provisioning mode this setup has ever actually run reliably.
+# `www.sunnahsky.com` additionally needed `services/pds/index.ts`'s
+# ADDITIONAL_APPROVED_DOMAINS to actually include it (`atproto` `33000ed69`)
+# - fixed same week. Do not remove `tls { on_demand }` from any block below
+# without a real test that survives a `docker restart caddy` and confirms
+# the exact host actually serves TLS afterward - a green `caddy validate`
+# and a same-second curl are not sufficient verification for this class
+# of bug. Full incident record in HANDOFF.md, 2026-09-14/17 entries.
 {
 	email abdullahalam@salafibookstore.com
 	on_demand_tls {
@@ -55,16 +58,16 @@ pds.sunnahsky.com {
 
 sunnahsky.com {
 	# Deliberately NOT on_demand: PDS_HOSTNAME moved away from this domain
-	# and it was never added to ADDITIONAL_APPROVED_DOMAINS in
-	# services/pds/index.ts, so /tls-check now rejects it outright
-	# ("handles are not provided on this domain") - putting it on_demand
-	# broke it fresh on the very next `docker restart caddy`, even though
-	# a valid, already-issued certificate for it already existed on disk.
-	# Regular managed TLS works correctly here (this is the one host of
-	# the four broken-then-half-fixed above that has zero wildcard
-	# overlap with *.sunnahsky.com, and it never actually broke under
-	# regular mode - only pds./app./www. did). Caddy renews this on its
-	# own background schedule without ever calling the ask endpoint.
+	# and it is not in ADDITIONAL_APPROVED_DOMAINS in services/pds/index.ts,
+	# so /tls-check rejects it outright ("handles are not provided on this
+	# domain") - putting it on_demand broke it fresh on the next
+	# `docker restart caddy`, even though a valid, already-issued
+	# certificate for it already existed on disk. Regular managed TLS works
+	# correctly here (this is the one host of the four broken-then-fixed in
+	# the incident above that has zero wildcard overlap with
+	# *.sunnahsky.com, and it never actually broke under regular mode -
+	# only pds./app./www. did). Caddy renews this on its own background
+	# schedule without ever calling the ask endpoint.
 	root * /etc/caddy/sunnahsky-web
 	try_files {path} /index.html
 	file_server
@@ -77,14 +80,6 @@ app.sunnahsky.com {
 	redir https://sunnahsky.com{uri} 301
 }
 
-# NOT YET WORKING even under on_demand: /tls-check rejects this domain
-# outright (`NotFound: handle not found for this domain`) since
-# services/pds/index.ts's ADDITIONAL_APPROVED_DOMAINS only ever listed
-# `app.sunnahsky.com` - www.sunnahsky.com was never added when this stage
-# was built. Needs a PDS code fix + image rebuild before this block can
-# actually issue a certificate; the block stays here, consistent with the
-# rest of the config, so it starts working the moment that ships without
-# a further Caddy change.
 www.sunnahsky.com {
 	tls {
 		on_demand
@@ -92,11 +87,43 @@ www.sunnahsky.com {
 	redir https://sunnahsky.com{uri} 301
 }
 
-# Stage 1 only: every handle host still proxies straight through, same as
-# before the move - no path-based redirect yet (that's Stage 2).
-*.guest.sunnahsky.com, *.sunnahsky.com {
+# Only /.well-known/atproto-did is proxied to the PDS - the PDS does not
+# check the Host header on XRPC routes, so passing /xrpc/* through here
+# (as the original brief's "defensive only" plan called for) would serve
+# the entire API on every {handle}.sunnahsky.com host. Nothing legitimately
+# calls XRPC on a handle host: the DID document's own service endpoint is
+# pds.sunnahsky.com, and handle resolution is the one .well-known fetch.
+#
+# {labels.N} counts DNS labels from the right, zero-based. Worked example:
+# johnsmith.sunnahsky.com -> labels.0=com, labels.1=sunnahsky,
+# labels.2=johnsmith (this block only ever sees the Striker tier, so
+# labels.2 is always the name).
+*.sunnahsky.com {
 	tls {
 		on_demand
 	}
-	reverse_proxy http://localhost:3000
+	@wellknown path /.well-known/atproto-did
+	handle @wellknown {
+		reverse_proxy http://localhost:3000
+	}
+	handle {
+		redir https://sunnahsky.com/{labels.2}{uri} 301
+	}
+}
+
+# Worked example: jakecooper.guest.sunnahsky.com -> labels.0=com,
+# labels.1=sunnahsky, labels.2=guest, labels.3=jakecooper. This block only
+# ever sees the Catcher tier (the *.guest. subdomain), so labels.3 is
+# always the name.
+*.guest.sunnahsky.com {
+	tls {
+		on_demand
+	}
+	@wellknown path /.well-known/atproto-did
+	handle @wellknown {
+		reverse_proxy http://localhost:3000
+	}
+	handle {
+		redir https://sunnahsky.com/{labels.3}.guest{uri} 301
+	}
 }
