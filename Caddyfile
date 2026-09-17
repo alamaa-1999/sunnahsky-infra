@@ -54,9 +54,17 @@ pds.sunnahsky.com {
 }
 
 sunnahsky.com {
-	tls {
-		on_demand
-	}
+	# Deliberately NOT on_demand: PDS_HOSTNAME moved away from this domain
+	# and it was never added to ADDITIONAL_APPROVED_DOMAINS in
+	# services/pds/index.ts, so /tls-check now rejects it outright
+	# ("handles are not provided on this domain") - putting it on_demand
+	# broke it fresh on the very next `docker restart caddy`, even though
+	# a valid, already-issued certificate for it already existed on disk.
+	# Regular managed TLS works correctly here (this is the one host of
+	# the four broken-then-half-fixed above that has zero wildcard
+	# overlap with *.sunnahsky.com, and it never actually broke under
+	# regular mode - only pds./app./www. did). Caddy renews this on its
+	# own background schedule without ever calling the ask endpoint.
 	root * /etc/caddy/sunnahsky-web
 	try_files {path} /index.html
 	file_server
