@@ -69,8 +69,41 @@ sunnahsky.com {
 	# only pds./app./www. did). Caddy renews this on its own background
 	# schedule without ever calling the ask endpoint.
 	root * /etc/caddy/sunnahsky-web
-	try_files {path} /index.html
-	file_server
+
+	# Phase 4a-1: the head service fronts every navigation on the apex and
+	# returns the SPA shell with a real <head> where one applies (canonical
+	# article/profile URLs, /.well-known/site.standard.publication/*), or
+	# the unmodified shell otherwise. Assets never touch it: this list is
+	# the web export's top level (`ls sunnahsky-web`), matched by prefix or
+	# exact name - NOT by file extension, because a Catcher profile URL such
+	# as /jakecooper.guest has a dot in it and is a navigation. A web export
+	# that adds a new top-level file needs this list updated in the same
+	# deploy, or that file is served as the shell.
+	@assets path /static/* /pwa/* /index.html /asset-manifest.json /manifest.json /serve.json /postMock.html /favicon.ico /favicon-16.png /favicon-32.png
+	handle @assets {
+		file_server
+	}
+	handle {
+		reverse_proxy http://localhost:3010 {
+			health_uri /healthz
+			health_interval 10s
+			fail_duration 30s
+			lb_try_duration 1s
+		}
+	}
+	# When the service is down or unhealthy the proxy yields 502/503/504;
+	# fall back to the plain shell so the app still loads - the only thing
+	# lost is the head, served as a 200 so a browser or crawler does not
+	# record an error for an app route. Scoped to those codes so a genuinely
+	# missing asset
+	# stays a 404 (site-level directive: Caddy does not allow handle_errors
+	# inside a handle block).
+	handle_errors 502 503 504 {
+		rewrite * /index.html
+		file_server {
+			status 200
+		}
+	}
 }
 
 app.sunnahsky.com {

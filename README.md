@@ -6,9 +6,13 @@ The live Caddy config for `sunnahsky.com` / `app.sunnahsky.com`, tracked in git 
 
 **Every explicit host block in this Caddyfile uses `tls { on_demand }` except the apex (`sunnahsky.com`), which deliberately does not** - see that block's own comment before changing this. This asymmetry is load-bearing, confirmed by the incident above, not an oversight to "clean up."
 
+**Phase 4a-1 (head service) - Caddyfile change prepared, not yet deployed.** The apex block splits into an asset matcher (file_server) and a catch-all that proxies navigations to the `head` container on `localhost:3010`, with `handle_errors` falling back to the plain shell when the service is down. `head.env.example` and `compose.head.example.yaml` are the two droplet-side files it needs (`/pds/head.env`, and a fragment for `/pds/compose.yaml`). The asset matcher lists the web export's top-level files by name; a web export that adds a new top-level file needs the matcher updated in the same deploy. Sequencing and verification: `phase-4a-1-head-service-plan.md` in the workspace, Task 9.
+
 ## Layout
 
 - `Caddyfile` - the actual served config.
+- `head.env.example` - the head service's env file, copied to `/pds/head.env` (no secrets).
+- `compose.head.example.yaml` - the `head` service fragment for `/pds/compose.yaml`.
 - `/pds/caddy/etc/caddy/` on the droplet **is** a checkout of this repo (not a copy synced into it). `sunnahsky-web/` (the deployed static web build) lives alongside the Caddyfile in that same directory but is gitignored here - it's deployed separately, via `social-app`'s web export + `rsync`.
 
 ## Deploying a Caddyfile change
