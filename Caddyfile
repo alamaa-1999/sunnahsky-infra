@@ -70,6 +70,19 @@ sunnahsky.com {
 	# schedule without ever calling the ask endpoint.
 	root * /etc/caddy/sunnahsky-web
 
+	# Access log for the apex only (2026-09-20). Three uses: seeing which
+	# fetchers hit article/profile pages and with what user agent (cardyb,
+	# WhatsApp, search crawlers), watching the per-publish indexer burst,
+	# and a request baseline before the AppView work. /data is the bind
+	# mount at /pds/caddy/data on the host. Rolls at 50MB, keeps 5.
+	log {
+		output file /data/access/apex.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+		format json
+	}
+
 	# Phase 4a-1: the head service fronts every navigation on the apex and
 	# returns the SPA shell with a real <head> where one applies (canonical
 	# article/profile URLs, /.well-known/site.standard.publication/*), or
