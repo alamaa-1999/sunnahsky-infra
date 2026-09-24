@@ -91,8 +91,10 @@ sunnahsky.com {
 	# exact name - NOT by file extension, because a Catcher profile URL such
 	# as /jakecooper.guest has a dot in it and is a navigation. A web export
 	# that adds a new top-level file needs this list updated in the same
-	# deploy, or that file is served as the shell.
-	@assets path /static/* /pwa/* /index.html /asset-manifest.json /manifest.json /serve.json /postMock.html /favicon.ico /favicon-16.png /favicon-32.png
+	# deploy, or that file is served as the shell. /_expo/*, /assets/* and
+	# /metadata.json are the Metro export's (upstream merge step 2); the rest
+	# are the webpack export's, kept so a rollback to it needs no change here.
+	@assets path /_expo/* /assets/* /metadata.json /static/* /pwa/* /index.html /asset-manifest.json /manifest.json /serve.json /postMock.html /favicon.ico /favicon-16.png /favicon-32.png
 	handle @assets {
 		file_server
 	}
