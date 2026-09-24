@@ -1,8 +1,12 @@
 # Fragment to add under `services:` in /pds/compose.yaml on the droplet
 # (that file is not tracked here). Replace <sha> with the social-app commit
-# the GHCR workflow built (tag `head-<sha>`). The web root is bind-mounted
-# read-only so the service reads the same index.html Caddy's file_server
-# serves; it re-reads on mtime change, so a web deploy needs no restart.
+# the GHCR workflow built (tag `head-<sha>`). The service reads the same
+# index.html Caddy's file_server serves and re-reads it when its mtime
+# changes, so a web deploy needs no restart. Mount the PARENT of the web
+# root, read-only, never sunnahsky-web itself: a web deploy renames that
+# directory aside and moves the new build into its place, and a bind mount
+# of the directory keeps showing the old build (tested on the droplet,
+# 2026-09-23). Through the parent, the path resolves to the new build.
   head:
     container_name: head
     image: ghcr.io/alamaa-1999/social-app:head-<sha>
@@ -10,8 +14,8 @@
     restart: unless-stopped
     volumes:
       - type: bind
-        source: /pds/caddy/etc/caddy/sunnahsky-web
-        target: /web
+        source: /pds/caddy/etc/caddy
+        target: /caddy
         read_only: true
     env_file:
       - /pds/head.env
